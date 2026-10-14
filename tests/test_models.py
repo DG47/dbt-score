@@ -4,6 +4,8 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
+import pytest
+
 from dbt_score.models import Exposure, ManifestLoader, Model, Snapshot
 
 
@@ -145,6 +147,43 @@ def test_manifest_load_without_omitted_keys(mock_read_text, raw_manifest):
     assert loader.models["model.package.model1"].relation_name is None
     assert loader.sources["source.package.my_source.table1"].source_meta == {}
     assert loader.exposures["exposure.package.exposure1"].url is None
+
+
+@pytest.mark.parametrize(
+    "column_name",
+    [
+        "a",
+        "`a`",  # Quoted column, e.g. BigQuery or Databricks
+        '"a"',  # Quoted column, e.g. Snowflake, Postgres, Redshift or DuckDB
+    ],
+)
+@patch("dbt_score.models.Path.read_text")
+def test_manifest_load_quoted_column_test(mock_read_text, raw_manifest, column_name):
+    """Test that column tests are matched when dbt quotes the column name."""
+    test_node = raw_manifest["nodes"]["test.package.test1"]
+    test_node["test_metadata"]["kwargs"]["column_name"] = column_name
+
+    with patch("dbt_score.models.json.loads", return_value=raw_manifest):
+        loader = ManifestLoader(Path("some.json"))
+
+    model1 = loader.models["model.package.model1"]
+    assert [test.name for test in model1.columns[0].tests] == ["test1"]
+    assert "test1" not in [test.name for test in model1.tests]
+
+
+@pytest.mark.parametrize("column_name", ['"a', 'a"', '"a`'])
+@patch("dbt_score.models.Path.read_text")
+def test_manifest_load_unbalanced_quoted_column_test(
+    mock_read_text, raw_manifest, column_name
+):
+    """Test that only a matching pair of enclosing quotes is removed."""
+    test_node = raw_manifest["nodes"]["test.package.test1"]
+    test_node["test_metadata"]["kwargs"]["column_name"] = column_name
+
+    with patch("dbt_score.models.json.loads", return_value=raw_manifest):
+        loader = ManifestLoader(Path("some.json"))
+
+    assert loader.models["model.package.model1"].columns[0].tests == []
 
 
 @patch("dbt_score.models.Path.read_text")

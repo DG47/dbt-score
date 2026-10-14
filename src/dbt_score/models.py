@@ -137,8 +137,26 @@ class HasColumnsMixin:
         return None
 
     @staticmethod
+    def _unquote_column_name(column_name: str) -> str:
+        """Remove the identifier quotes dbt adds to quoted column names in tests.
+
+        When a column is quoted (`quote: true` on the column, or quoting enabled for
+        all columns of a source or seed), dbt stores the column name in the test
+        kwargs quoted with the adapter's quote character: backticks for e.g.
+        BigQuery and Databricks, double quotes for e.g. Snowflake, Postgres,
+        Redshift and DuckDB.
+        """
+        if (
+            len(column_name) > 1
+            and column_name[0] == column_name[-1]
+            and column_name[0] in {"`", '"'}
+        ):
+            return column_name[1:-1]
+        return column_name
+
+    @classmethod
     def _get_columns(
-        node_values: dict[str, Any], test_values: list[dict[str, Any]]
+        cls, node_values: dict[str, Any], test_values: list[dict[str, Any]]
     ) -> list[Column]:
         """Get columns from a node and its tests in the manifest."""
         return [
@@ -147,10 +165,11 @@ class HasColumnsMixin:
                 [
                     test
                     for test in test_values
-                    if test.get("test_metadata", {})
-                    .get("kwargs", {})
-                    .get("column_name", "")
-                    .strip("`")  # BigQuery connector when "quote: true"
+                    if cls._unquote_column_name(
+                        test.get("test_metadata", {})
+                        .get("kwargs", {})
+                        .get("column_name", "")
+                    )
                     == name
                 ],
             )

@@ -8,6 +8,9 @@ and this project adheres to
 
 ## [Unreleased]
 
+- Fix retrieval of data_tests for quoted columns on adapters using double
+  quotes, e.g. Snowflake, Postgres, Redshift and DuckDB.
+
 ## [0.19.0] - 2026-10-07
 
 - Drop support for Python 3.10. The minimum required version is now 3.11.
